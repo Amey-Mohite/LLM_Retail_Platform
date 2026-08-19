@@ -349,6 +349,45 @@ Because a 20,000-product catalog and a set of embeddings are expensive to rebuil
 stack is something you do many times a day. Destroying data is a separate, explicitly named target —
 `make clean` — precisely so it cannot happen by reflex.
 
+**`ollama` (or `make`, or `winget`) says "not recognized as the name of a cmdlet", but the directory
+is definitely in PATH. Why?**
+Because a process receives its environment **as a copy from its parent, taken at launch**. Editing
+PATH updates the registry and notifies running apps, but a terminal spawned by an `explorer.exe` that
+started *before* the edit inherits Explorer's stale copy — and so does every "new window" opened from
+that same Explorer. Opening another window does not help, because the stale parent is what is being
+copied from. **Sign out and back in, or reboot.** Until then, the full path works:
+`& "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe" pull ...`
+
+This bit three separate tools in this phase — `make` and `winget` immediately after installation, and
+`ollama`, which had been installed long before but had never had a fresh login since.
+
+**How do you tell a stale environment apart from a truncated PATH?**
+They look identical from the prompt and have different fixes, so check rather than guess. Compare the
+stored value against the live one:
+
+```powershell
+$stored = ([Environment]::GetEnvironmentVariable('Path','User') -split ';') | Where-Object {$_}
+$live   = ($env:Path -split ';') | Where-Object {$_}
+$stored | Where-Object { $live -notcontains $_ }
+```
+
+If the live PATH is a **prefix** of the stored one — everything up to some point, nothing after — it
+is length truncation, and the fix is to shorten PATH or move the entry earlier. If entries are
+missing from the **middle**, or the last stored entries are present, it is not truncation and the
+environment is simply stale.
+
+One genuinely missing entry was found this way on this machine: the user PATH contained
+`C:\WINDOWS\system32\config\systemprofile\AppData\Local\Microsoft\WindowsApps` — the **SYSTEM
+account's** directory — in place of the real `%LOCALAPPDATA%\Microsoft\WindowsApps`, which is why
+`winget` could not be found by name at all. That is the fingerprint of a `setx` run from an elevated
+or SYSTEM context. The same user PATH also held a complete second copy of the machine PATH in two
+different casings, 35 duplicate entries in total. Neither is fatal, and neither was caused by this
+project — worth recognising, not worth fixing mid-phase.
+
+**Never repair PATH with `setx PATH "%PATH%;..."`.** It truncates at 1024 characters and merges the
+user and machine values into one, which silently destroys entries. Use the Environment Variables GUI,
+or `[Environment]::SetEnvironmentVariable('Path', $value, 'User')`, and back the old value up first.
+
 **Was the exit criterion actually met, or does it just look met?**
 Met, and measured in both directions. `5/5 services healthy` came from a script that makes real
 requests and exits non-zero when they fail — and it *was* observed failing, reporting `1/5`, before

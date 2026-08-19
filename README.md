@@ -48,6 +48,11 @@ Tiers: **1** load-bearing · **2** demonstrative · **3** showcase. See [DESIGN.
 Requires Docker Desktop, Python 3.12+, GNU make, and [Ollama](https://ollama.com) installed natively
 (it runs on the host, not in Compose, so it reaches the GPU without WSL2 passthrough).
 
+> **Windows:** if a freshly installed tool reports *"not recognized as the name of a cmdlet"* even
+> though it is on PATH, sign out and back in. Terminals inherit their environment from the Explorer
+> process that spawned them, so a new window is not enough — see
+> [phase0.md §8](docs/phase0.md#8-qa).
+
 ```bash
 make up
 ```
