@@ -1,0 +1,32 @@
+[project]
+name = "atelier"
+version = "0.1.0"
+description = "Reusable RAG, agent-orchestration and evaluation infrastructure for fashion e-commerce"
+requires-python = ">=3.12"
+dependencies = []  # added per phase, never in advance
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "import-linter>=2.1",  # Phase 0.6 enforces the layer rule of PROJECT_BRIEF.md section 4
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["atelier*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
