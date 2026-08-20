@@ -157,7 +157,8 @@ missing value stops the stack with a clear message instead of starting something
 
 **Honesty tier: Tier 2 — demonstrative.** The generation is done correctly with real entropy, but the
 secrets sit in a plaintext file on disk with no vault, no rotation, no audit and no per-environment
-separation. That is the right amount of machinery for a local stack bound to localhost, and it is
+separation. That is the right amount of machinery for a local stack whose ports are bound to
+`127.0.0.1`, and it is
 explicitly *not* what this would look like in production — where these values would come from Azure
 Key Vault, ideally as short-lived credentials issued to a workload identity so there is no stored
 secret to leak at all.

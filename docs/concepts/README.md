@@ -19,6 +19,7 @@ Written to be read top to bottom. Each assumes the ones above it.
 | 2 | [Health checks and readiness](health-checks-and-readiness.md) | Asking whether a service can serve *now*, rather than inferring it from the process existing | 0.1 |
 | 3 | [Configuration and secrets](configuration-and-secrets.md) | Keeping what differs between environments — and what must never leak — out of the code | 0.1 |
 | 4 | [Interface substitution](interface-substitution.md) | Depending on an interface you own, so a vendor becomes a swappable detail | 0.1 design, 0.2 code |
+| 5 | [Tokens and token accounting](tokens-and-accounting.md) | What a model actually charges for, and how to make counting it unskippable | 0.2 |
 
 Start with **service orchestration** if you are new to containers. Start with **interface
 substitution** if you want the idea the whole project is built on — it is the reason this runs on a
@@ -34,7 +35,7 @@ phase that introduces them, per [DOCS_STANDARDS.md](../DOCS_STANDARDS.md) §5.
 | Phase | Concepts introduced |
 |---|---|
 | **0.1** | [Service orchestration](service-orchestration.md) · [Health checks and readiness](health-checks-and-readiness.md) · [Configuration and secrets](configuration-and-secrets.md) · [Interface substitution](interface-substitution.md) |
-| 0.2 | Tokenisation and token accounting · the provider abstraction in code |
+| **0.2** | [Tokens and token accounting](tokens-and-accounting.md) · the provider abstraction in code, extending [interface substitution](interface-substitution.md) |
 | 0.3 | Retries, timeouts, circuit breakers, fallback chains |
 | 0.4 | Cost modelling and spend guards |
 | 0.5 | Distributed tracing and OpenTelemetry · experiment tracking |

@@ -39,11 +39,12 @@ be described in language that makes it sound Tier 1.
 
 | Area | Tier | Standing |
 |---|---|---|
+| Provider interface + enforced token accounting | **1** | Complete: one seam, accounting in the return type |
 | Readiness gate (`scripts/health.py`) | **1** | Complete for its purpose |
 | Docs format checker (`scripts/check_docs.py`) | **1** | Complete, self-tested |
 | Local service stack (Compose) | **2** | Real services and versions, single node, no TLS, no auth, one Postgres role |
 | Secret handling | **2** | Correct entropy and idempotent, but plaintext on disk, no rotation or audit |
-| Ollama as model server | **2** | Real and GPU-backed, but no routing, failover or accounting yet — Phases 0.2 to 0.4 |
+| `OllamaProvider` | **2** | Real calls, correct usage extraction. No retry, failover or cost yet — Phases 0.3 to 0.4 |
 | "Azure-shaped" substitution | **3** | Designed and documented. **Zero lines tested against real Azure** |
 | Kubernetes / scale claims | **not built** | Phase 8. Manifests will be written and validated, not deployed — and said so |
 | Everything from Phase 1 onward | **not built** | — |
@@ -57,7 +58,8 @@ Budgets from PROJECT_BRIEF.md §9, actuals recorded as phases land.
 | Phase | Est. hours | Actual | Est. spend | Actual spend |
 |---|---|---|---|---|
 | 0.1 | 2 | ~2 | $0 | **$0** |
-| 0.2 to 0.6 | 8 | — | ~$3 | — |
+| 0.2 | 2 | ~2 | $0 | **$0** |
+| 0.3 to 0.6 | 6 | — | ~$3 | — |
 | 1 to 8 | ~120 | — | ~$52 | — |
 
 Running spend against the **$80 hard ceiling**: **$0**. Nothing metered has been called yet.
@@ -121,5 +123,69 @@ secret generation and idempotency · treating documentation rules as testable ra
 Nothing tested against real Azure. No Kubernetes manifest exists yet. No model pulled, so no
 inference has happened. Stack only ever started on one Windows machine — never on Linux, never in CI,
 never on a second machine. `make clean` never executed.
+
+**Spend:** $0.
+
+### Phase 0.2 — The provider interface: one seam, and nothing gets through it uncounted
+
+**Exit criterion:** 100 calls through the interface, 0 unhandled exceptions; every response carries
+`tokens_in/out`, `model`, `latency_ms`.
+**Result: met.** `100/100 complete and fully accounted`, 0 failures, p50/p95 latency 2037/3106 ms,
+4109 in / 1124 out tokens, 0.45 calls/s sequential.
+**Walkthrough:** [docs/phase0.2.md](docs/phase0.2.md).
+
+**Delivered**
+
+- `atelier/gateway/provider.py` — `Completion` (frozen, self-validating), the `Provider` protocol, and
+  `GatewayError`. Accounting lives in the return type, so it cannot be skipped by a caller.
+- `atelier/gateway/ollama.py` — the local implementation via Ollama's OpenAI-compatible endpoint.
+  Normalises every vendor exception to `GatewayError`, and **raises rather than reporting zero** when a
+  response arrives with no usage block.
+- `scripts/gate_02.py` — the exit criterion as an executable gate, with a `--self-test` that proves it
+  rejects an unaccounted response.
+- `make gate-0.2`; `openai` added as the first runtime dependency; decision-log entries 14 to 17.
+- Docs: this log, `docs/phase0.2.md`, and the `tokens-and-accounting` concept.
+
+**Skills exercised**
+
+Ports-and-adapters applied to a model provider · making a cross-cutting concern structural rather than
+conventional by putting it in a return type · normalising a vendor's exception taxonomy at a seam ·
+reading a `usage` block and knowing why a zero is worse than an error · measuring throughput early
+enough for it to change a later plan.
+
+**Trade-offs made** (full reasoning in [docs/decision-log.md](docs/decision-log.md) 14 to 17)
+
+| Chose | Over | Because | Cost accepted |
+|---|---|---|---|
+| Ollama's OpenAI-compatible endpoint | Its native `/api/chat` | Azure and OpenRouter speak the same protocol, so Phase 0.3's adapters become nearly empty | One runtime dependency |
+| Accounting enforced by the return type | A helper everyone remembers to call | A guarantee that depends on memory is not a guarantee | A provider without usage data needs an explicit, visible opt-out |
+| `max_retries=0` on the client | The client's default retries | Phase 0.3 must *observe* failures to handle them | No resilience at all until 0.3 |
+| Raise on a missing usage block | Default to zero tokens | Zero is indistinguishable from a free call and corrupts every later total | A stricter provider contract |
+| Venv outside the repo | `.venv` on the Drive | Measured: 149s local versus 9+ min unfinished on the Drive | Venv path is machine-specific, so `PY` is overridable |
+
+**⚠️ Scaffolded — be ready to explain**
+
+- **The seam is not yet enforced.** Nothing stops a future module importing `openai` directly. The
+  import-linter contract in Phase 0.6 is what makes the guarantee real; today it is a convention.
+- `max_retries=0` — be ready to explain deliberately disabling a resilience feature in order to build
+  resilience.
+- No `.env` loading yet; the provider falls back to a working default. Phase 0.3 forces the issue.
+- `temperature=0` is not determinism — GPU floating-point non-associativity and batching still move
+  results between runs.
+- **The model does not fully fit in VRAM:** `ollama ps` reports `18%/82% CPU/GPU` for a 7B Q4 at 4096
+  context on a 6 GB RTX 2060.
+
+**Not run live**
+
+No Azure call, no OpenRouter call — the "one env var" migration remains untested. No concurrency
+tried; every number is sequential. No real failure injection: the provider has never been observed
+timing out or being killed mid-request. Nothing has run in CI, on Linux, or on a second machine.
+
+**⚠️ Early warning for Phase 1.6.** 0.45 calls/s sequential. Phase 1.6 requires 20,000 products in
+under 6 hours, which is 0.93 items/s — **just over twice the measured rate**, so that batch currently
+takes about 12 hours and misses its gate. Levers, to be chosen deliberately in Phase 1 rather than
+panicked over now: concurrent requests (`OLLAMA_NUM_PARALLEL`, and the GPU was only at 55%
+utilisation), a smaller model on the bulk path, harder output caps, or a smaller context so the model
+sits entirely in VRAM.
 
 **Spend:** $0.

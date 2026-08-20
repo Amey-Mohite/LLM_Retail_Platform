@@ -25,7 +25,7 @@ and hallucination become **exactly measurable with no human labelling**.
 | Phase | Delivers | Exit criterion | Tier | Status |
 |---|---|---|---|---|
 | **0.1** | Service stack, readiness gate, repo skeleton | 5/5 services healthy · clean `down` | 2 | ✅ **met** — [walkthrough](docs/phase0.md) |
-| 0.2 | Provider interface + Ollama, token accounting | 100 calls, 0 unhandled exceptions | — | next |
+| **0.2** | Provider interface + Ollama, token accounting | 100 calls, 0 unhandled exceptions | 1 | ✅ **met** — [walkthrough](docs/phase0.2.md) |
 | 0.3 | OpenRouter + Azure providers, failover | Kill primary mid-request → completes on fallback | — | — |
 | 0.4 | Spend guard, cost ledger | Counter within 2% of dashboard; guard raises at ceiling | — | — |
 | 0.5 | OpenTelemetry → Langfuse, MLflow tracking | One call → one complete trace with cost and route reason | — | — |
@@ -85,7 +85,7 @@ same even though the spend is $0. Full mapping and migration notes: [PROJECT_BRI
 |---|---|---|---|---|
 | **Ollama** | host, native | http://localhost:11434 | Azure OpenAI | Base URL — both speak the OpenAI protocol |
 | **Qdrant** | docker | http://localhost:6333/dashboard | Azure AI Search | Real work: different filter and hybrid APIs |
-| **Postgres** | docker | `localhost:5432` — dbs `atelier`, `langfuse` | Cosmos / Azure DB | Low |
+| **Postgres** | docker | `localhost:5433` — dbs `atelier`, `langfuse` | Cosmos / Azure DB | Low |
 | **Langfuse** | docker | http://localhost:3000 | Azure Monitor / App Insights | OpenTelemetry is the portable layer |
 | **MLflow** | docker | http://localhost:5000 | Azure ML | Low — Azure ML is MLflow-compatible |
 
@@ -109,6 +109,9 @@ atelier/
 docs/               # phaseN.md walkthroughs · concepts/ handbook · decision-log · standards
 ops/                # docker-compose, k8s manifests, load tests, CI config
 scripts/            # health gate, secret generation, docs checker
+
+Generated, gitignored, never committed: .venv/ (virtualenv), atelier.egg-info/
+(setuptools metadata from the editable install), __pycache__/, .env (your secrets).
 ```
 
 **Each layer is a dependency of the layer above and knows nothing about it.** A capability may not

@@ -1,6 +1,9 @@
 # Recipes stay single-command and shell-agnostic: this runs under cmd.exe on
 # Windows and sh in CI. Anything conditional lives in scripts/*.py.
-.PHONY: env up down ps logs health clean
+# Windows venv layout. CI on Linux overrides: make gate-0.2 PY=.venv/bin/python
+PY ?= .venv/Scripts/python
+
+.PHONY: env up down ps logs health clean gate-0.2
 
 env:
 	python scripts/env_init.py
@@ -20,6 +23,10 @@ logs:
 
 health:
 	python scripts/health.py
+
+## Phase 0.2 exit criterion: 100 calls, 0 unhandled exceptions, every response accounted.
+gate-0.2:
+	$(PY) scripts/gate_02.py --calls 100
 
 ## Also drops the volumes: catalog, traces and MLflow runs are gone.
 clean:

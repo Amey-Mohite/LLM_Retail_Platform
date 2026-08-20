@@ -53,7 +53,9 @@ def check_mermaid(path: pathlib.Path, lines: list[str]) -> list[Finding]:
                 out.append((path, lineno, "mermaid: parentheses in participant alias - use '·'"))
             for tag in re.findall(r"<[^>]*>", ln):
                 if tag != "<br/>":
-                    out.append((path, lineno, f"mermaid: '{tag}' parses as HTML - only <br/> allowed"))
+                    out.append(
+                        (path, lineno, f"mermaid: '{tag}' parses as HTML - only <br/> allowed")
+                    )
             for label in re.findall(r"\|([^|]*)\|", ln):
                 if re.search(r"[()\[\]{}:,]", label) and not label.strip().startswith('"'):
                     out.append((path, lineno, f'mermaid: quote the edge label - |"{label}"|'))

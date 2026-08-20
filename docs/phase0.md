@@ -101,7 +101,7 @@ still hold the old password while `.env` held a new one.
 ### 3.2 `scripts/health.py::http(url)` — a check factory
 
 ```python
-def http(url: str, *, expect: int = 200):
+def http(url: str) -> Callable[[], str | None]:
     def check() -> str | None:
         ...
     return check
@@ -131,7 +131,7 @@ itself.
 ```python
 p = subprocess.run(
     ["docker", "compose", "exec", "-T", "postgres", "pg_isready", "-U", "atelier", "-d", "atelier"],
-    capture_output=True, text=True,
+    capture_output=True, text=True, cwd=ROOT,
 )
 ```
 
@@ -150,6 +150,10 @@ p = subprocess.run(
 
 A plain TCP connect to port 5432 would be the lazier check and would be **wrong**: Postgres binds the
 port before it finishes recovery, so a TCP-open test reports ready while queries still fail.
+
+`cwd=ROOT` is not decoration. `docker compose` locates its project by searching upward from the
+current directory, so without it the check passes when run via `make` from the repo root and fails
+with a confusing "no configuration file provided" from anywhere else.
 
 ### 3.4 `scripts/health.py::main()` — the retry loop
 
@@ -176,7 +180,7 @@ deadline.
 # out: stdout
 #        ok    ollama    host :11434
 #        ok    qdrant    docker :6333
-#        ok    postgres  docker :5432
+#        ok    postgres  docker :5433
 #        ok    mlflow    docker :5000
 #        ...   waiting on langfuse
 #        ...   waiting on langfuse
@@ -190,7 +194,27 @@ deadline.
 
 The non-zero exit is what makes this a **gate** rather than a report. `make` stops on it.
 
-### 3.5 `scripts/check_docs.py::mermaid_blocks(lines)`
+### 3.5 `scripts/health.py::self_test()`
+
+The gate is the phase. A gate that cannot fail is decoration, so `run()` takes its service list as an
+argument and the self-test hands it stubs — no Docker required.
+
+```
+# in : python scripts/health.py --self-test
+# out: asserts all four behaviours, then
+#      "self-test ok: gate passes when healthy, fails when not, retries, and gives up", exit 0
+```
+
+It asserts that a healthy set exits 0, that **one** failure exits 1, that a service which is not
+ready at first is retried until it is, and that the loop gives up at the deadline instead of hanging.
+
+**It earned its place immediately:** on its first run it exposed a live bug — the summary line read
+`5/5 services healthy` while checking two stub services, because it was counting the module-level
+`SERVICES` list rather than the one actually passed in. The exit code was right, so `make up` would
+have behaved correctly and the *number printed to a human* would have been wrong. Nothing but a test
+that calls the function with a different list would have found that.
+
+### 3.6 `scripts/check_docs.py::mermaid_blocks(lines)`
 
 **"Walk the file once and hand back just the diagram sections, along with the line numbers they
 started on, so any problem can be reported at the right line."**
@@ -200,7 +224,7 @@ started on, so any problem can be reported at the right line."**
 # out: yields (2, [(3, "sequenceDiagram"), (4, "  A->>B: hi")])
 ```
 
-### 3.6 `scripts/check_docs.py::check_mermaid(path, lines)`
+### 3.7 `scripts/check_docs.py::check_mermaid(path, lines)`
 
 ```
 # in : a block containing "  participant A as AI (FastAPI)"
@@ -213,7 +237,7 @@ started on, so any problem can be reported at the right line."**
 # out: []          <- br is the one legal tag
 ```
 
-### 3.7 `scripts/check_docs.py::self_test()`
+### 3.8 `scripts/check_docs.py::self_test()`
 
 ```
 # in : python scripts/check_docs.py --self-test
@@ -268,8 +292,17 @@ are never mistaken for settled work.
 - **One Postgres role, and it is the owner.** No least privilege, no separate application role.
   Phase 6 needs row-level security, which is close to meaningless if the app connects as the owner,
   so this must change there. It is a known gap, not an oversight.
-- **No authentication on Qdrant or MLflow**, and no TLS anywhere. Fine bound to localhost, wrong the
-  moment anything is exposed.
+- **No authentication on Qdrant or MLflow**, and no TLS anywhere. Every published port is therefore
+  bound explicitly to `127.0.0.1` rather than to `0.0.0.0`, so nothing is reachable from the local
+  network. Publishing as `"5432:5432"` would listen on every interface — which on a shared or public
+  network means an unauthenticated Qdrant and MLflow to anyone on it. Be ready to explain that the
+  short form of `ports:` defaults to all interfaces, and that this is the single most common way a
+  development stack ends up exposed.
+- **The `langfuse` database is created only on the *first* initialisation of the `pgdata` volume.**
+  Postgres runs `/docker-entrypoint-initdb.d/*` exactly once, when the data directory is empty. If
+  the inlined SQL is ever changed, an existing volume will not pick it up and Langfuse will fail to
+  connect for reasons that look nothing like the cause — the fix is `make clean`, which destroys
+  data. Know this before editing that block.
 - **GPU headroom is 6 GB (RTX 2060).** No model has been pulled yet. Whether a 7B generator, an
   embedding model and Llama Guard 3 can be resident together is an open question that lands in
   Phase 4, not an answered one.
@@ -308,7 +341,8 @@ Per [DOCS_STANDARDS.md](DOCS_STANDARDS.md) §4, stated rather than implied.
 make up                                   -> 5/5 services healthy, warm start 24s
 make down                                 -> 0 containers, 0 networks, 3 volumes kept
 python scripts/health.py                  -> verified in both pass and fail states
-python scripts/check_docs.py              -> 5 files checked, 0 problems
+python scripts/health.py --self-test      -> gate proven to pass, fail, retry and give up
+python scripts/check_docs.py              -> 12 files checked, 0 problems
 python scripts/check_docs.py --self-test  -> 5 rules fire, clean input passes
 python -m py_compile scripts/*.py         -> all compile
 docker inspect .Config.Healthcheck        -> confirmed only postgres declares one

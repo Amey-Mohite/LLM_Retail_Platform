@@ -3,7 +3,11 @@ name = "atelier"
 version = "0.1.0"
 description = "Reusable RAG, agent-orchestration and evaluation infrastructure for fashion e-commerce"
 requires-python = ">=3.12"
-dependencies = []  # added per phase, never in advance
+dependencies = [
+  # Added per phase, never in advance. Ollama, OpenRouter and Azure OpenAI all speak
+  # this client's protocol, which is what makes the Phase 0.3 adapters small.
+  "openai>=1.55",
+]
 
 [project.optional-dependencies]
 dev = [
