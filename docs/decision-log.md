@@ -31,3 +31,40 @@ the same reason.
 **Phase 0.1.** The brief's exit criteria are written as `make up` / `make eval` and CI speaks make.
 Recipes are kept to single shell-agnostic commands so they run under both `cmd.exe` and `sh`;
 anything conditional lives in `scripts/*.py`.
+
+## 14. The Ollama provider speaks OpenAI's protocol, not Ollama's native API
+**Phase 0.2.** Ollama exposes both `/api/chat` (its own shape) and `/v1/chat/completions`
+(OpenAI-compatible). The native API needs no dependency at all — `urllib` would do. The
+OpenAI-compatible one costs the `openai` package, and buys the entire Phase 0.3 Azure and
+OpenRouter adapters, because all three speak the same protocol: same client, different base URL.
+Paying one dependency now to make two later adapters nearly empty is the whole "Azure-shaped,
+locally-run" claim, honoured in code rather than asserted. **Cost:** one runtime dependency, and a
+provider that ever stops being OpenAI-shaped needs a real adapter rather than a config change.
+
+## 15. Accounting is enforced by the return type, not by convention
+**Phase 0.2.** `Completion` is frozen and validates in `__post_init__`: a negative token count or a
+missing model name raises rather than being recorded. A provider that cannot report usage raises
+instead of reporting zero. The point is that there is no way to obtain a model response in this
+codebase that is not already accounted for — a guarantee that depends on every future call site
+remembering it is not a guarantee. **Cost:** a provider whose API genuinely omits usage cannot be
+adapted without either counting tokens locally or explicitly opting out, and that will have to be a
+visible decision.
+
+## 16. No retries, timeouts or fallback in 0.2
+**Phase 0.2.** The provider raises `GatewayError` and stops. Retry, circuit-breaking and the
+fallback chain are Phase 0.3's exit criterion, and building them early would mean the 0.3 gate tests
+code that was never observed failing. The one thing done now is normalising the vendor's exception
+type, so callers never catch `openai.APIError`.
+
+## 17. The virtualenv is `.venv` in the repository, with a documented escape hatch
+**Phase 0.2.** Measured, not assumed: `pip install` into `.venv` on the Google Drive path was still
+unfinished after nine minutes having written two packages, while the identical install into a
+local-disk venv finished in 149 seconds. A virtualenv is thousands of small files, the pathological
+case for a syncing network filesystem.
+
+**Decided: `.venv` stays in the repository**, because the convention is worth more than the minutes —
+`pip install -e ".[dev]"` from the repo root is what every contributor and every CI runner expects,
+and the `Makefile` default `PY ?= .venv/Scripts/python` then needs no override. **Cost accepted:**
+every dependency install on this machine is slow, and that cost recurs each phase that adds a
+library. `PY` is overridable precisely so anyone who finds it intolerable can point at a local-disk
+venv without editing a tracked file.
